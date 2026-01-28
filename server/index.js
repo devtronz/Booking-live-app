@@ -1,57 +1,67 @@
+const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 
-const server = http.createServer();
-const io = new Server(server, { cors: { origin: "*" } });
+const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: { origin: "*" }
+});
 
+/* 🔥 HEALTH CHECK */
+app.get("/", (req, res) => {
+  res.send("🚕 Booking Ride Server is LIVE");
+});
+
+let pendingOtps = {};
+let riders = {};
 let currentRide = null;
 
 io.on("connection", (socket) => {
-  console.log("CONNECTED:", socket.id);
+  console.log("Connected:", socket.id);
 
-  socket.on("driver-online", () => {
-    io.emit("admin-log", `🚕 Driver online (${socket.id})`);
+  socket.on("send-otp", ({ contact }) => {
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    pendingOtps[socket.id] = {
+      contact,
+      otp,
+      expires: Date.now() + 2 * 60 * 1000
+    };
+
+    console.log("OTP:", otp);
+    io.emit("admin-log", `🔐 OTP sent to ${contact} → ${otp}`);
+    socket.emit("otp-sent");
+  });
+
+  socket.on("verify-otp", ({ otp }) => {
+    const record = pendingOtps[socket.id];
+    if (!record || record.otp !== otp || Date.now() > record.expires) {
+      socket.emit("otp-result", { success: false, msg: "Invalid/Expired OTP" });
+      return;
+    }
+
+    riders[socket.id] = { contact: record.contact };
+    delete pendingOtps[socket.id];
+
+    io.emit("admin-log", `✅ Rider verified: ${record.contact}`);
+    socket.emit("otp-result", { success: true });
   });
 
   socket.on("book-ride", (ride) => {
-    currentRide = {
-      ...ride,
-      status: "REQUESTED"
-    };
-    io.emit("admin-log", `👤 User booked ride: ${ride.pickup} → ${ride.drop}`);
+    currentRide = { ...ride, status: "REQUESTED" };
     io.emit("new-ride", currentRide);
+    io.emit("admin-log", "🚕 Ride booked");
   });
 
   socket.on("accept-ride", () => {
     if (!currentRide) return;
     currentRide.status = "ACCEPTED";
-    io.emit("admin-log", "✅ Driver accepted ride");
     io.emit("ride-update", currentRide);
-  });
-
-  socket.on("start-ride", () => {
-    if (!currentRide) return;
-    currentRide.status = "STARTED";
-    io.emit("admin-log", "▶️ Ride started");
-    io.emit("ride-update", currentRide);
-  });
-
-  socket.on("end-ride", () => {
-    if (!currentRide) return;
-    currentRide.status = "COMPLETED";
-    io.emit("admin-log", "🏁 Ride completed");
-    io.emit("ride-update", currentRide);
-    currentRide = null;
-  });
-
-  socket.on("disconnect", () => {
-    io.emit("admin-log", `❌ Disconnected (${socket.id})`);
+    io.emit("admin-log", "✅ Ride accepted");
   });
 });
-
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
   console.log("Server running on", PORT);
 });
-
