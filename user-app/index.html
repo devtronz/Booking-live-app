@@ -1,49 +1,37 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>User App</title>
+  <title>User Panel</title>
 </head>
-
 <body>
-
-<h2>User</h2>
-
-<input id="pickup" placeholder="Pickup location">
-<br><br>
-<input id="drop" placeholder="Drop location">
-<br><br>
+<h2>👤 User Panel</h2>
 
 <button onclick="bookRide()">Book Ride</button>
-
-<p id="status"></p>
+<p id="status">Status: Idle</p>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 <script>
-  const socket = io("https://booking-ride-live-app.onrender.com", {
-  transports: ["websocket"],
-  reconnection: true
-});
+const socket = io("https://booking-ride-live-app.onrender.com");
 
+const userId = "user_" + Math.floor(Math.random() * 1000);
+socket.emit("join-user", userId);
 
-const pickup = document.getElementById("pickup");
-const drop = document.getElementById("drop");
-const statusEl = document.getElementById("status");
-
-function bookRide(){
+function bookRide() {
   socket.emit("book-ride", {
-    pickup: pickup.value,
-    drop: drop.value,
-    fare: 220
+    userId,
+    pickup: "Mall Road",
+    drop: "Bus Stand",
+    fare: 200
   });
 
-  statusEl.innerText = "🚕 Searching driver...";
+  document.getElementById("status").innerText =
+    "Status: Searching driver...";
 }
 
-socket.on("ride-update", (ride) => {
-  statusEl.innerText = "Status: " + ride.status;
+socket.on("ride-update", data => {
+  document.getElementById("status").innerText =
+    "Status: " + data.status;
 });
 </script>
-
 </body>
 </html>
