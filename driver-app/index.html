@@ -1,80 +1,44 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta charset="UTF-8">
-<title>Driver App</title>
+  <title>Driver Panel</title>
 </head>
-
 <body>
+<h2>🚕 Driver Panel</h2>
+<p id="ride">Waiting for ride...</p>
 
-<h2>Driver</h2>
-
-<p id="status">Status: Online</p>
-
-<div id="rideBox">Waiting for ride...</div>
+<button onclick="acceptRide()">Accept Ride</button>
 
 <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
-  
 <script>
-  const socket = io("https://booking-ride-live-app.onrender.com", {
-  transports: ["websocket"],
-  reconnection: true
+const socket = io("https://booking-ride-live-app.onrender.com");
+
+const driverId = "driver_" + Math.floor(Math.random() * 1000);
+socket.emit("join-driver", driverId);
+
+let currentRide = null;
+
+socket.on("new-ride", ride => {
+  currentRide = ride;
+  document.getElementById("ride").innerText =
+    `New Ride:
+User: ${ride.userId}
+From: ${ride.pickup}
+To: ${ride.drop}
+Fare: ₹${ride.fare}`;
 });
 
-const statusEl = document.getElementById("status");
-const rideBox = document.getElementById("rideBox");
+function acceptRide() {
+  if (!currentRide) return alert("No ride");
 
-// tell server driver is online
-socket.on("connect", () => {
-  socket.emit("driver-online");
-});
+  socket.emit("accept-ride", {
+    rideId: currentRide.id,
+    driverId
+  });
 
-// receive new ride
-socket.on("new-ride", (ride) => {
-  if (ride.status !== "REQUESTED") return;
-
-  rideBox.innerHTML = `
-    <h3>New Ride</h3>
-    <p>📍 Pickup: ${ride.pickup}</p>
-    <p>🏁 Drop: ${ride.drop}</p>
-    <p>💰 Fare: ₹${ride.fare}</p>
-    <button onclick="acceptRide()">Accept</button>
-  `;
-});
-
-// ride state updates
-socket.on("ride-update", (ride) => {
-  if (ride.status === "ACCEPTED") {
-    rideBox.innerHTML = `
-      <p>Ride accepted</p>
-      <button onclick="startRide()">Start Ride</button>
-    `;
-  }
-
-  if (ride.status === "STARTED") {
-    rideBox.innerHTML = `
-      <p>Ride started</p>
-      <button onclick="endRide()">End Ride</button>
-    `;
-  }
-
-  if (ride.status === "COMPLETED") {
-    rideBox.innerHTML = "Ride completed ✅";
-  }
-});
-
-function acceptRide(){
-  socket.emit("accept-ride");
-}
-
-function startRide(){
-  socket.emit("start-ride");
-}
-
-function endRide(){
-  socket.emit("end-ride");
+  document.getElementById("ride").innerText =
+    "Ride accepted 🚕";
 }
 </script>
-
 </body>
 </html>
